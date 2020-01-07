@@ -9,11 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use RuntimeException;
 use ReflectionObject;
-
+use Log;
+use DB;
 /**
  * Mix this in to your model class to enable fillable relations.
  * Usage:
@@ -176,16 +178,18 @@ trait HasFillableRelations
 
         $relation->detach();
         $pivotColumns = [];
+
+
         foreach ($attributes as $related) {
             if (isset($related['pivot']) && is_array($related['pivot'])) {
                 $pivotColumns = $related['pivot'];
                 unset($related['pivot']);
             }
+
             if (!$related instanceof Model) {
                 $related = $relation->getRelated()
-                    ->where($related)->firstOrFail();
+                    ->where('id', '=', $related['id'])->firstOrFail();
             }
-
             $relation->attach($related, $pivotColumns);
         }
     }
@@ -230,6 +234,27 @@ trait HasFillableRelations
                 $related->exists = $related->wasRecentlyCreated;
             }
 
+            $relation->save($related);
+        }
+    }
+
+    /**
+     * @param HasMany $relation
+     * @param array $attributes
+     */
+    public function fillMorphToManyRelation(MorphToMany $relation, array $attributes, $relationName)
+    {
+        if (!$this->exists) {
+            $this->save();
+            $relation = $this->{Str::camel($relationName)}();
+        }
+
+        $relation->delete();
+        foreach ($attributes as $related) {
+            if (!$related instanceof Model) {
+                $related = $relation->getRelated()
+                    ->where('id', '=', $related['id'])->firstOrFail();
+            }
             $relation->save($related);
         }
     }
